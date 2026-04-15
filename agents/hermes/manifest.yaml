@@ -60,6 +60,11 @@ state_dirs:
   - cache
   - pairing
 
+# ── Home directory env var ─────────────────────────────────────
+# NemoClaw exports this env var in recovery scripts so the agent
+# process can locate its writable state directory.
+home_env_var: HERMES_HOME
+
 # ── Authentication ──────────────────────────────────────────────
 # Hermes does NOT have OpenClaw-style browser device pairing.
 # Web UI auth is Bearer token via API_SERVER_KEY env var.

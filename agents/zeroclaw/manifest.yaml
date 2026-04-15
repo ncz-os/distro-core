@@ -1,0 +1,103 @@
+# SPDX-FileCopyrightText: Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+# SPDX-FileCopyrightText: Copyright (c) 2026 Jason Perlow. All rights reserved.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Agent manifest for ZeroClaw (zeroclaw-labs).
+# Declares the integration contract between NemoClaw and the sandboxed agent.
+
+name: zeroclaw
+display_name: "ZeroClaw"
+description: "Lightweight autonomous agent runtime in Rust (zeroclaw-labs)"
+version_constraint: ">=0.6.0"
+language: rust
+license: MIT
+homepage: "https://github.com/zeroclaw-labs/zeroclaw"
+
+# ── Binary & process ────────────────────────────────────────────
+install_method: prebuilt  # pre-built binary downloaded from GitHub releases
+binary_path: /usr/local/bin/zeroclaw
+gateway_command: "zeroclaw gateway start"
+
+# ── Health probe ────────────────────────────────────────────────
+# ZeroClaw exposes GET /health -> {"status": "ok", ...} on the gateway port.
+health_probe:
+  url: "http://localhost:42617/health"
+  port: 42617
+  timeout_seconds: 60
+
+# ── Dashboard / UI ──────────────────────────────────────────────
+# ZeroClaw exposes an OpenAI-compatible API on port 42617 and serves
+# its web frontend from the same port.
+forward_ports:
+  - 42617
+
+# ── Configuration ───────────────────────────────────────────────
+config:
+  immutable_dir: /sandbox/.zeroclaw
+  writable_dir: /sandbox/.zeroclaw-data
+  config_file: config.toml      # relative to immutable_dir
+  format: toml
+
+# ── State directories ──────────────────────────────────────────
+# Symlinked from immutable_dir -> writable_dir so the agent can
+# write state while the config directory stays Landlock read-only.
+state_dirs:
+  - workspace
+  - memory
+  - channels_config
+  - cron
+  - logs
+  - plugins
+  - cache
+
+# ── Skill system ───────────────────────────────────────────────
+# ZeroClaw uses WASM plugins (agents/zeroclaw/plugin/), not the
+# OpenClaw-compatible TypeScript skill system. Skill install is
+# not supported; use the ZeroClaw plugin SDK instead.
+supports_skills: false
+
+# ── Home directory env var ─────────────────────────────────────
+# NemoClaw exports this env var in recovery scripts so the agent
+# process can locate its writable state directory.
+home_env_var: ZEROCLAW_HOME
+
+# ── Authentication ──────────────────────────────────────────────
+# ZeroClaw does NOT have OpenClaw-style browser device pairing.
+# Pairing is optional and done via `zeroclaw gateway get-paircode`.
+# We disable it for sandbox deployments managed by NemoClaw.
+device_pairing: false
+web_auth_method: bearer_token
+web_auth_env: ZEROCLAW_API_KEY
+
+# ── Messaging platforms ─────────────────────────────────────────
+# ZeroClaw supports multiple channels via its channel plugin system.
+messaging_platforms:
+  supported:
+    - telegram
+    - discord
+    - slack
+
+# ── Inference ───────────────────────────────────────────────────
+# ZeroClaw routes inference through the "compatible" provider type
+# which wraps any OpenAI-compatible endpoint. We configure it to
+# use OpenShell's inference.local proxy.
+inference:
+  provider_type: compatible
+  base_url_config_key: "provider.compatible.base_url"
+  model_config_key: "default_model"
+  proxy_support: explicit  # set via HTTP_PROXY env var
+
+# ── Phone-home hosts ───────────────────────────────────────────
+# Agent-specific egress endpoints needed for updates, auth, etc.
+phone_home_hosts:
+  - zeroclaw-labs.com
+  - api.zeroclaw-labs.com
+
+# ── Package registry ───────────────────────────────────────────
+# ZeroClaw plugins are WASM modules. Skills may need crates.io for
+# compilation (build-time only, not runtime sandbox egress).
+package_registry:
+  hosts:
+    - crates.io
+    - static.crates.io
+  binary: /usr/local/bin/cargo
